@@ -12,7 +12,7 @@ import time
 # Google OAuth details
 CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
 CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
-REDIRECT_URI = "https://your-app-name.streamlit.app"  # Update with your Streamlit app URL
+REDIRECT_URI = "https://kaal-ai-qsqsqtwzpa4enxmzcde74g.streamlit.app/"  # Update with your Streamlit app URL
 AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
