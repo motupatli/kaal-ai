@@ -30,7 +30,7 @@ def get_oauth():
 oauth = get_oauth()
 
 # Check for callback code
-params = st.experimental_get_query_params()
+params = st.query_params()
 
 if "token" not in st.session_state:
     if "code" in params:
