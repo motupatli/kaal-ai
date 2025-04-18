@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import json
 import os
+import uuid
 from datetime import datetime
 import time
 
@@ -39,8 +40,8 @@ st.markdown("""
     }
 
     .user-message {
-        background-color: 	#3FE0D0;  /* Purple for user */
-        color: BLACK;
+        background-color: #3FE0D0;
+        color: black;
         padding: 10px;
         border-radius: 10px;
         margin: 5px 0;
@@ -49,7 +50,7 @@ st.markdown("""
     }
 
     .bot-message {
-        background-color: #ADD8E6; /* Cyan for AI bot */
+        background-color: #ADD8E6;
         color: black;
         padding: 10px;
         border-radius: 10px;
@@ -68,13 +69,17 @@ st.markdown("""
     </video>
 """, unsafe_allow_html=True)
 
-# Configure Gemini API key
+# Configure Gemini API Key
 genai.configure(api_key="AIzaSyD60S4qvkQM0cXVmYsZ1Slj5IrdoEpXtso")
 
-# Chat History File
-HISTORY_FILE = "chat_history.json"
+# Create Unique User ID for Session
+if "user_id" not in st.session_state:
+    st.session_state.user_id = str(uuid.uuid4())
 
-# Load or Initialize Chat History
+USER_ID = st.session_state.user_id
+HISTORY_FILE = f"chat_history_{USER_ID}.json"
+
+# Load Chat History
 if os.path.exists(HISTORY_FILE):
     with open(HISTORY_FILE, "r", encoding="utf-8") as f:
         try:
@@ -86,7 +91,7 @@ if os.path.exists(HISTORY_FILE):
 else:
     all_chats = {}
 
-# Today’s Session Key
+# Today’s Key
 today_key = datetime.now().strftime("%Y-%m-%d")
 if today_key not in all_chats:
     all_chats[today_key] = []
@@ -130,24 +135,24 @@ if user_input:
         st.session_state.chat_session = model.start_chat(history=history_messages)
 
     try:
-        # Display typing indicator
+        # Typing animation
         st.markdown("<div class='typing-indicator'>🤖 **Kaal AI is typing...**</div>", unsafe_allow_html=True)
-        time.sleep(1)  # Simulate typing delay
-        
-        # Get response from AI
+        time.sleep(1)
+
+        # Get AI response
         chat = st.session_state.chat_session
         ai_response = chat.send_message(user_input).text
 
-        # Display AI response
+        # Show response
         st.markdown(f"<div class='bot-message'>🤖 **Kaal AI**: {ai_response}</div>", unsafe_allow_html=True)
         st.markdown("---")
 
-        # Save to history
+        # Save
         all_chats[today_key].append({"user": user_input, "bot": ai_response})
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(all_chats, f, indent=2, ensure_ascii=False)
 
-        # Refresh page to display new content
+        # Refresh to show chat
         st.rerun()
 
     except Exception as e:
