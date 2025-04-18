@@ -1,10 +1,63 @@
 import streamlit as st
+from authlib.integrations.requests_client import OAuth2Session
 import google.generativeai as genai
 import json
 import os
 import uuid
 from datetime import datetime
 import time
+
+# --- 1) Google Login Integration ---
+
+# Google OAuth details
+CLIENT_ID = st.secrets["GOOGLE_CLIENT_ID"]
+CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
+REDIRECT_URI = "https://your-app-name.streamlit.app"  # Update with your Streamlit app URL
+AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
+SCOPES = "openid email profile"
+
+# Create OAuth session
+@st.cache_resource
+def get_oauth():
+    return OAuth2Session(
+        CLIENT_ID,
+        CLIENT_SECRET,
+        scope=SCOPES,
+        redirect_uri=REDIRECT_URI,
+    )
+oauth = get_oauth()
+
+# Check for callback code
+params = st.experimental_get_query_params()
+
+if "token" not in st.session_state:
+    if "code" in params:
+        # User has been redirected back from Google
+        code = params["code"][0]
+        token = oauth.fetch_token(
+            TOKEN_ENDPOINT,
+            code=code,
+            grant_type="authorization_code",
+            include_client_id=True
+        )
+        st.session_state.token = token
+        st.experimental_set_query_params()  # clear code from URL
+        st.experimental_rerun()
+    else:
+        # Show “Login with Google” link
+        auth_url, _ = oauth.create_authorization_url(AUTHORIZATION_ENDPOINT)
+        st.markdown(f"[👉 Login with Google]({auth_url})")
+        st.stop()
+
+# Fetch user info
+token = st.session_state.token
+resp = oauth.get(USERINFO_ENDPOINT, token=token)
+user_info = resp.json()
+st.session_state.username = user_info.get("email")
+
+# --- 2) Setup for Chat and UI ---
 
 # Page Config
 st.set_page_config(page_title="Kaal AI - Desi GPT", page_icon="🧠", layout="wide")
@@ -127,7 +180,7 @@ if user_input:
 
     history_messages = []
     for msg in all_chats[today_key]:
-        history_messages.append({"role": "user", "parts": [msg["user"]]})
+        history_messages.append({"role": "user", "parts": [msg["user"]]} )
         history_messages.append({"role": "model", "parts": [msg["bot"]]})
 
     if "chat_session" not in st.session_state:
@@ -147,13 +200,19 @@ if user_input:
         st.markdown(f"<div class='bot-message'>🤖 **Kaal AI**: {ai_response}</div>", unsafe_allow_html=True)
         st.markdown("---")
 
-        # Save
+        # Save chat history
         all_chats[today_key].append({"user": user_input, "bot": ai_response})
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(all_chats, f, indent=2, ensure_ascii=False)
 
-        # Refresh to show chat
+        # Refresh page to show updated chat
         st.rerun()
 
     except Exception as e:
         st.error(f"⚠️ Error: {e}")
+
+# --- 3) Logout Button (Optional) ---
+if st.sidebar.button("🚪 Logout"):
+    for k in ["token", "username", "user_id"]:
+        st.session_state.pop(k, None)
+    st.experimental_rerun()
