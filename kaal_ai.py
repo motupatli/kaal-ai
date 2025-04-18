@@ -3,22 +3,22 @@ from authlib.integrations.requests_client import OAuth2Session
 import google.generativeai as genai
 import json
 import os
-import uuid
 from datetime import datetime
 import time
 
-# --- 1) Google Login Integration ---
-
-# Google OAuth details
-CLIENT_ID = "872182720005-9ube1btau24gpun9e85604alrtrho4ac.apps.googleusercontent.com"
+# ─── 1) GOOGLE OAUTH CONFIG ─────────────────────────────────────
+# Add these keys to Streamlit secrets
+CLIENT_ID     = st.secrets["GOOGLE_CLIENT_ID"]
 CLIENT_SECRET = st.secrets["GOOGLE_CLIENT_SECRET"]
-REDIRECT_URI = "https://your-app-name.streamlit.app"  # Update with your Streamlit app URL
+
+# Your deployed Streamlit URL (must match Authorized JavaScript Origins)
+REDIRECT_URI = "https://your-app-name.streamlit.app"
+
 AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
-TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo"
+TOKEN_ENDPOINT         = "https://oauth2.googleapis.com/token"
+USERINFO_ENDPOINT      = "https://openidconnect.googleapis.com/v1/userinfo"
 SCOPES = "openid email profile"
 
-# Create OAuth session
 @st.cache_resource
 def get_oauth():
     return OAuth2Session(
@@ -29,12 +29,10 @@ def get_oauth():
     )
 oauth = get_oauth()
 
-# Check for callback code
-params = st.experimental_get_query_params()
-
+# ─── 2) HANDLE LOGIN / CALLBACK ───────────────────────────────────
+params = st.query_params
 if "token" not in st.session_state:
     if "code" in params:
-        # User has been redirected back from Google
         code = params["code"][0]
         token = oauth.fetch_token(
             TOKEN_ENDPOINT,
@@ -46,90 +44,49 @@ if "token" not in st.session_state:
         st.experimental_set_query_params()  # clear code from URL
         st.experimental_rerun()
     else:
-        # Show “Login with Google” link
         auth_url, _ = oauth.create_authorization_url(AUTHORIZATION_ENDPOINT)
         st.markdown(f"[👉 Login with Google]({auth_url})")
         st.stop()
 
-# Fetch user info
-token = st.session_state.token
-resp = oauth.get(USERINFO_ENDPOINT, token=token)
+# ─── 3) FETCH USER INFO ───────────────────────────────────────────
+resp = oauth.get(USERINFO_ENDPOINT, token=st.session_state.token)
 user_info = resp.json()
 st.session_state.username = user_info.get("email")
 
-# --- 2) Setup for Chat and UI ---
+# ─── 4) LOGOUT BUTTON ─────────────────────────────────────────────
+if st.sidebar.button("🚪 Logout"):
+    for k in ["token", "username"]:
+        st.session_state.pop(k, None)
+    st.experimental_rerun()
 
-# Page Config
+# ─── 5) PAGE CONFIG & STYLES ───────────────────────────────────────
 st.set_page_config(page_title="Kaal AI - Desi GPT", page_icon="🧠", layout="wide")
-
-# Inject futuristic background + custom font
 st.markdown("""
     <style>
-    .stApp {
-        background-color: white;
-    }
-
-    video {
-        position: fixed;
-        right: 0;
-        bottom: 0;
-        min-width: 100vw;
-        min-height: 100vh;
-        z-index: -1;
-        object-fit: cover;
-        opacity: 0.2;
-    }
-
+    .stApp { background-color: white; }
+    video { position: fixed; right: 0; bottom: 0; min-width: 100vw; min-height: 100vh;
+            z-index: -1; object-fit: cover; opacity: 0.2; }
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'Orbitron', sans-serif;
-        color: #00ffe1;
-        text-shadow: 0 0 8px #00ffe1;
-    }
-
-    .block-container {
-        padding-top: 4rem;
-    }
-
-    .user-message {
-        background-color: #3FE0D0;
-        color: black;
-        padding: 10px;
-        border-radius: 10px;
-        margin: 5px 0;
-        max-width: 80%;
-        margin-left: 10px;
-    }
-
-    .bot-message {
-        background-color: #ADD8E6;
-        color: black;
-        padding: 10px;
-        border-radius: 10px;
-        margin: 5px 0;
-        max-width: 80%;
-        margin-right: 10px;
-    }
-
-    .typing-indicator {
-        color: #00c8ff;
-    }
+    html, body, [class*="css"] { font-family: 'Orbitron', sans-serif;
+            color: #00ffe1; text-shadow: 0 0 8px #00ffe1; }
+    .block-container { padding-top: 4rem; }
+    .user-message { background-color: #3FE0D0; color: black; padding: 10px;
+            border-radius: 10px; margin: 5px 0; max-width: 80%; margin-left: 10px; }
+    .bot-message  { background-color: #ADD8E6; color: black; padding: 10px;
+            border-radius: 10px; margin: 5px 0; max-width: 80%; margin-right: 10px; }
+    .typing-indicator { color: #00c8ff; }
     </style>
-
     <video autoplay loop muted>
-        <source src="https://assets.mixkit.co/videos/preview/mixkit-digital-interface-with-data-9735-large.mp4" type="video/mp4">
+        <source src="https://assets.mixkit.co/videos/preview/mixkit-digital-interface-with-data-9735-large.mp4"
+                type="video/mp4">
     </video>
 """, unsafe_allow_html=True)
 
-# Configure Gemini API Key
-genai.configure(api_key="AIzaSyD60S4qvkQM0cXVmYsZ1Slj5IrdoEpXtso")
+# ─── 6) CONFIGURE LLM KEY ─────────────────────────────────────────
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# Create Unique User ID for Session
-if "user_id" not in st.session_state:
-    st.session_state.user_id = str(uuid.uuid4())
-
-USER_ID = st.session_state.user_id
+# ─── 7) UNIQUE USER ID & HISTORY ───────────────────────────────────
+USER_ID = st.session_state.username
 HISTORY_FILE = f"chat_history_{USER_ID}.json"
 
 # Load Chat History
@@ -145,13 +102,16 @@ else:
     all_chats = {}
 
 # Today’s Key
+from datetime import datetime
+import uuid  # keep for legacy but not used for ID
+
 today_key = datetime.now().strftime("%Y-%m-%d")
 if today_key not in all_chats:
     all_chats[today_key] = []
 
 # Sidebar – Past Conversations
 with st.sidebar:
-    st.header("📅 Past Conversations")
+    st.header(f"📅 Past Conversations ({USER_ID})")
     for date in sorted(all_chats.keys(), reverse=True):
         with st.expander(date):
             for msg in all_chats[date]:
@@ -180,7 +140,7 @@ if user_input:
 
     history_messages = []
     for msg in all_chats[today_key]:
-        history_messages.append({"role": "user", "parts": [msg["user"]]} )
+        history_messages.append({"role": "user", "parts": [msg["user"]]})
         history_messages.append({"role": "model", "parts": [msg["bot"]]})
 
     if "chat_session" not in st.session_state:
@@ -200,19 +160,13 @@ if user_input:
         st.markdown(f"<div class='bot-message'>🤖 **Kaal AI**: {ai_response}</div>", unsafe_allow_html=True)
         st.markdown("---")
 
-        # Save chat history
+        # Save
         all_chats[today_key].append({"user": user_input, "bot": ai_response})
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(all_chats, f, indent=2, ensure_ascii=False)
 
-        # Refresh page to show updated chat
-        st.rerun()
+        # Refresh to show chat
+        st.experimental_rerun()
 
     except Exception as e:
         st.error(f"⚠️ Error: {e}")
-
-# --- 3) Logout Button (Optional) ---
-if st.sidebar.button("🚪 Logout"):
-    for k in ["token", "username", "user_id"]:
-        st.session_state.pop(k, None)
-    st.experimental_rerun()
